@@ -30,4 +30,4 @@ Command :
 
 
   ## Vidéo de démonstration 
-  ![](https://github.com/xnom0/MicrosoftSecureKey/blob/main/service_1080p_25fps_10pts.mkv)
+  [![Watch the video](https://i.sstatic.net/Vp2cE.png)](https://github.com/xnom0/MicrosoftSecureKey/blob/main/service_1080p_25fps_10pts.mkv)
